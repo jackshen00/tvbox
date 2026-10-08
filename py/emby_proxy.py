@@ -22,7 +22,8 @@ class Spider(Spider):
             self.baseUrl = extendDict['server'].strip('/')
             self.username = extendDict['username']
             self.password = extendDict['password']
-            self.proxy = extendDict['proxy']
+            self.network_mode = extendDict.get('network_mode', '')
+            self.proxy = '' if self.network_mode == 'system' else extendDict.get('proxy', '')
             self.thread = extendDict['thread'] if 'thread' in extendDict else 0
             self.device_id = extendDict.get('device_id', str(uuid4()))
             self.client = extendDict.get('client', 'Hills Windows')
@@ -33,6 +34,7 @@ class Spider(Spider):
             self.username = ''
             self.password = ''
             self.proxy = ''
+            self.network_mode = ''
             self.thread = 0
             self.device_id = str(uuid4())
             self.client = 'Hills Windows'
@@ -63,6 +65,16 @@ class Spider(Spider):
     def manualVideoCheck(self):
         pass
 
+    def _get_proxies(self):
+        if self.network_mode == 'system' or not self.proxy:
+            return None
+        return {"http": self.proxy, "https": self.proxy}
+
+    def _image_url(self, url):
+        if not url or self.network_mode == 'system':
+            return url
+        return 'http://127.0.0.1:10079/p/0/127.0.0.1:10172/' + url
+
     def homeContent(self, filter):
         try:
             embyInfos = self.getAccessToken()
@@ -79,7 +91,7 @@ class Spider(Spider):
             "X-Emby-Client-Version": self.client_version,
             "X-Emby-Token": embyInfos['AccessToken']
         }
-        r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+        r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
         typeInfos = r.json()["Items"]
         classList = []
         for typeInfo in typeInfos:
@@ -121,7 +133,7 @@ class Spider(Spider):
             "Fields": "BasicSyncInfo,CanDelete,Container,PrimaryImageAspectRatio,ProductionYear,CommunityRating,Status,CriticRating,EndDate,Path",
             "EnableUserData": "true"
         }
-        r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+        r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
         videoList = r.json()['Items']
         videos = []
         for video in videoList:
@@ -129,7 +141,7 @@ class Spider(Spider):
             videos.append({
                 "vod_id": video['Id'],
                 "vod_name": name,
-                "vod_pic": f"http://127.0.0.1:10079/p/0/127.0.0.1:10172/{self.baseUrl}/emby/Items/{video['Id']}/Images/Primary?maxWidth=400&tag={video['ImageTags']['Primary']}&quality=90" if 'Primary' in video['ImageTags'] else '',
+                "vod_pic": self._image_url(f"{self.baseUrl}/emby/Items/{video['Id']}/Images/Primary?maxWidth=400&tag={video['ImageTags']['Primary']}&quality=90") if 'Primary' in video['ImageTags'] else '',
                 "vod_remarks": video['ProductionYear'] if 'ProductionYear' in video else ''
             })
         result['list'] = videos
@@ -147,7 +159,7 @@ class Spider(Spider):
 
         header = self.header.copy()
         header['Content-Type'] = "application/json; charset=UTF-8"
-        url = f"http://127.0.0.1:10079/p/0/127.0.0.1:10172/{self.baseUrl}/emby/Users/{embyInfos['User']['Id']}/Items/{did[0]}"
+        url = self._image_url(f"{self.baseUrl}/emby/Users/{embyInfos['User']['Id']}/Items/{did[0]}")
         params = {
             "X-Emby-Client": self.client,
             "X-Emby-Device-Name": self.device_name,
@@ -155,12 +167,12 @@ class Spider(Spider):
             "X-Emby-Client-Version": self.client_version,
             "X-Emby-Token": embyInfos['AccessToken']
         }
-        r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+        r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
         videoInfos = r.json()
         vod = {
             "vod_id": did[0],
             "vod_name": videoInfos['Name'],
-            "vod_pic": f'http://127.0.0.1:10079/p/0/127.0.0.1:10172/{self.baseUrl}/emby/Items/{did[0]}/Images/Primary?maxWidth=400&tag={videoInfos["ImageTags"]["Primary"]}&quality=90' if 'Primary' in videoInfos['ImageTags'] else '',
+            "vod_pic": self._image_url(f'{self.baseUrl}/emby/Items/{did[0]}/Images/Primary?maxWidth=400&tag={videoInfos["ImageTags"]["Primary"]}&quality=90') if 'Primary' in videoInfos['ImageTags'] else '',
             "type_name": videoInfos['Genres'][0] if len(videoInfos['Genres']) > 0 else '',
             "vod_year": videoInfos['ProductionYear'] if 'ProductionYear' in videoInfos else '',
             "vod_content": videoInfos['Overview'].replace('\xa0', ' ').replace('\n\n', '\n').strip() if 'Overview' in videoInfos else '',
@@ -180,7 +192,7 @@ class Spider(Spider):
                     "EnableTotalRecordCount": "false"
                 }
             )
-            r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+            r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
             if r.status_code == 200:
                 playInfos = r.json()['Items']
                 for playInfo in playInfos:
@@ -191,7 +203,7 @@ class Spider(Spider):
                             "Fields": "BasicSyncInfo,CanDelete,CommunityRating,PrimaryImageAspectRatio,ProductionYear,Overview"
                         }
                     )
-                    r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+                    r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
                     videoList = r.json()['Items']
                     for video in videoList:
                         playUrl += f"{playInfo['Name'].replace('#', '-').replace('$', '|').strip()}|{video['Name'].strip()}${video['Id']}#"
@@ -209,7 +221,7 @@ class Spider(Spider):
                     "X-Emby-Client-Version": self.client_version,
                     "X-Emby-Token": embyInfos['AccessToken']
                 }
-                r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+                r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
                 videoList = r.json()['Items']
                 for video in videoList:
                     playUrl += f"{video['Name'].replace('#', '-').replace('$', '|').strip()}${video['Id']}#"
@@ -248,7 +260,7 @@ class Spider(Spider):
             "Limit": "50",
             "EnableTotalRecordCount": "true"
         }
-        r = requests.get(url, params=params, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+        r = requests.get(url, params=params, headers=header, timeout=120, proxies=self._get_proxies())
 
         videos = []
         vodList = r.json()['Items']
@@ -259,7 +271,7 @@ class Spider(Spider):
             videos.append({
                 "vod_id": sid,
                 "vod_name": name,
-                "vod_pic": f'http://127.0.0.1:10079/p/0/127.0.0.1:10172/{pic}',
+                "vod_pic": self._image_url(pic),
                 "vod_remarks": vod['ProductionYear'] if 'ProductionYear' in vod else ''
             })
         result = {'list': videos}
@@ -289,7 +301,7 @@ class Spider(Spider):
             "X-Emby-Token": embyInfos['AccessToken']
         }
         data = "{\"DeviceProfile\":{\"SubtitleProfiles\":[{\"Method\":\"Embed\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"Embed\"},{\"Format\":\"subrip\",\"Method\":\"Embed\"},{\"Format\":\"sub\",\"Method\":\"Embed\"},{\"Method\":\"Embed\",\"Format\":\"pgssub\"},{\"Format\":\"subrip\",\"Method\":\"External\"},{\"Method\":\"External\",\"Format\":\"sub\"},{\"Method\":\"External\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"External\"},{\"Method\":\"External\",\"Format\":\"vtt\"},{\"Method\":\"External\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"External\"}],\"CodecProfiles\":[{\"Codec\":\"h264\",\"Type\":\"Video\",\"ApplyConditions\":[{\"Property\":\"IsAnamorphic\",\"Value\":\"true\",\"Condition\":\"NotEquals\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"high|main|baseline|constrained baseline\",\"Condition\":\"EqualsAny\",\"Property\":\"VideoProfile\"},{\"IsRequired\":false,\"Value\":\"80\",\"Condition\":\"LessThanEqual\",\"Property\":\"VideoLevel\"},{\"IsRequired\":false,\"Value\":\"true\",\"Condition\":\"NotEquals\",\"Property\":\"IsInterlaced\"}]},{\"Codec\":\"hevc\",\"ApplyConditions\":[{\"Property\":\"IsAnamorphic\",\"Value\":\"true\",\"Condition\":\"NotEquals\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"high|main|main 10\",\"Condition\":\"EqualsAny\",\"Property\":\"VideoProfile\"},{\"Property\":\"VideoLevel\",\"Value\":\"175\",\"Condition\":\"LessThanEqual\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"true\",\"Condition\":\"NotEquals\",\"Property\":\"IsInterlaced\"}],\"Type\":\"Video\"}],\"MaxStreamingBitrate\":40000000,\"TranscodingProfiles\":[{\"Container\":\"ts\",\"AudioCodec\":\"aac,mp3,wav,ac3,eac3,flac,opus\",\"VideoCodec\":\"hevc,h264,mpeg4\",\"BreakOnNonKeyFrames\":true,\"Type\":\"Video\",\"MaxAudioChannels\":\"6\",\"Protocol\":\"hls\",\"Context\":\"Streaming\",\"MinSegments\":2}],\"DirectPlayProfiles\":[{\"Container\":\"mov,mp4,mkv,hls,webm\",\"Type\":\"Video\",\"VideoCodec\":\"h264,hevc,dvhe,dvh1,h264,hevc,hev1,mpeg4,vp9\",\"AudioCodec\":\"aac,mp3,wav,ac3,eac3,flac,truehd,dts,dca,opus,pcm,pcm_s24le\"}],\"ResponseProfiles\":[{\"MimeType\":\"video/mp4\",\"Type\":\"Video\",\"Container\":\"m4v\"}],\"ContainerProfiles\":[],\"MusicStreamingTranscodingBitrate\":40000000,\"MaxStaticBitrate\":40000000}}"
-        r = requests.post(url, params=params, data=data, headers=header, timeout=120, proxies={"http": self.proxy, "https": self.proxy})
+        r = requests.post(url, params=params, data=data, headers=header, timeout=120, proxies=self._get_proxies())
         
         # 获取播放URL
         media_sources = r.json()['MediaSources']
@@ -313,7 +325,7 @@ class Spider(Spider):
         except Exception as e:
             print(f"记录播放开始失败: {e}")
         
-        if int(self.thread) > 0:
+        if int(self.thread) > 0 and self.network_mode != 'system':
             try:
                 self.fetch('http://127.0.0.1:10079/p/0/127.0.0.1:10172/', timeout=120)
             except:
@@ -369,7 +381,7 @@ class Spider(Spider):
                 json=play_data, 
                 headers=header, 
                 timeout=5, 
-                proxies={"http": self.proxy, "https": self.proxy}
+                proxies=self._get_proxies()
             )
             if response.status_code == 200 or response.status_code == 204:
                 print(f"播放开始记录成功: {response.status_code}")
@@ -421,7 +433,7 @@ class Spider(Spider):
                 json=progress_data, 
                 headers=header, 
                 timeout=5, 
-                proxies={"http": self.proxy, "https": self.proxy}
+                proxies=self._get_proxies()
             )
             if response.status_code == 200 or response.status_code == 204:
                 print(f"播放进度更新成功: {position_seconds}秒")
@@ -472,7 +484,7 @@ class Spider(Spider):
                 json=stop_data, 
                 headers=header, 
                 timeout=5, 
-                proxies={"http": self.proxy, "https": self.proxy}
+                proxies=self._get_proxies()
             )
             if response.status_code == 200 or response.status_code == 204:
                 print(f"播放停止记录成功: 总时长 {total_duration:.1f}秒")
@@ -551,7 +563,7 @@ class Spider(Spider):
             json=auth_data, 
             headers=header, 
             timeout=120, 
-            proxies={"http": self.proxy, "https": self.proxy}
+            proxies=self._get_proxies()
         )
         embyInfos = r.json()
         self.setCache(key, embyInfos)

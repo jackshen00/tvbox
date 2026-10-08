@@ -1,2 +1,6 @@
 *.zip
 jar/hmml4f.txt
+.venv/
+__pycache__/
+*.pyc
+work/

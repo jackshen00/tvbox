@@ -33,6 +33,7 @@ class Spider(BaseSpider):
     }
 
     def init(self, extend=""):
+        self.network_mode = ""
         self.headers = dict(self.default_headers)
         self.site_cookie = ""
         self.pan_115_cookie = ""
@@ -84,6 +85,7 @@ class Spider(BaseSpider):
             try:
                 ext = json.loads(extend)
                 if isinstance(ext, dict):
+                    self.network_mode = ext.get("network_mode", "")
                     if ext.get("host"):
                         self.host = str(ext.get("host")).rstrip("/")
                     self.site_cookie = str(ext.get("cookie", "")).strip()
@@ -138,6 +140,8 @@ class Spider(BaseSpider):
 
         self.headers["Referer"] = f"{self.host}/"
         self.session = Session()
+        if self.network_mode == "system":
+            self.session.trust_env = False
         self.session.headers.update(self.headers)
         self.session.verify = False
 
@@ -5903,6 +5907,8 @@ def _b169_get_site_proxy(self):
     """
     只给 169BBS 页面、附件、图片使用的代理。
     """
+    if getattr(self, "network_mode", "") == "system":
+        return ""
     try:
         p = (
             getattr(self, "site_proxy", "")
@@ -6138,10 +6144,13 @@ def _b169_init(self, extend=""):
     if getattr(Spider, "_b169_old_init", None):
         Spider._b169_old_init(self, extend)
 
-    # 默认 PG 内置代理
-    self.proxy_url = getattr(self, "proxy_url", "") or _b169_default_proxy()
-    self.site_proxy = getattr(self, "site_proxy", "") or self.proxy_url
-    self.bbs_proxy = getattr(self, "bbs_proxy", "") or self.site_proxy
+    # 默认 PG 内置代理；系统 VPN 模式不会回落到本地端口。
+    if getattr(self, "network_mode", "") == "system":
+        self.proxy_url = self.site_proxy = self.bbs_proxy = ""
+    else:
+        self.proxy_url = getattr(self, "proxy_url", "") or _b169_default_proxy()
+        self.site_proxy = getattr(self, "site_proxy", "") or self.proxy_url
+        self.bbs_proxy = getattr(self, "bbs_proxy", "") or self.site_proxy
 
     # 图片需要走代理
     self.use_img_proxy = True
@@ -6162,7 +6171,7 @@ def _b169_init(self, extend=""):
                     or ext.get("proxy_url", "")
                     or ""
                 ).strip()
-                if p:
+                if p and getattr(self, "network_mode", "") != "system":
                     self.proxy_url = p
                     self.site_proxy = p
                     self.bbs_proxy = p

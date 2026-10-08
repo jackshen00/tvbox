@@ -23,24 +23,36 @@ class Spider(Spider):
     }
 
     def init(self, extend=''):
-        self.plp = json.loads(extend).get('plp', '')
-        self.proxy = json.loads(extend).get('proxy', {}) if extend else {}
+        cfg = json.loads(extend) if isinstance(extend, str) and extend else (extend or {})
+        self.network_mode = cfg.get('network_mode', '')
+        self.plp = '' if self.network_mode == 'system' else cfg.get('plp', '')
+        self.proxy = {} if self.network_mode == 'system' else cfg.get('proxy', {})
+        self.session = requests.Session()
+        if self.network_mode == 'system':
+            # 系统 VPN 已处理路由，不再读取进程环境中的 HTTP 代理。
+            self.session.trust_env = False
 
     def getName(self):
         return "memo"
 
     def fetch(self, url, params=None):
+        get = self.session.get if self.network_mode == 'system' else requests.get
         try:
-            r = requests.get(
-                url,
-                headers=self.headers,
-                params=params,
-                proxies=self.proxy,
-                timeout=15,
-            )
+            try:
+                r = get(url, headers=self.headers, params=params,
+                        proxies=self.proxy, timeout=15)
+            except (requests.exceptions.ProxyError, requests.exceptions.ConnectTimeout):
+                # 仅当明确配置的本地代理连接失败时，尝试系统网络。
+                if not self.proxy:
+                    raise
+                r = requests.get(url, headers=self.headers, params=params, timeout=15)
+            r.raise_for_status()
             return r.text
-        except Exception:
-            return ''
+        except requests.exceptions.RequestException as exc:
+            status = getattr(getattr(exc, 'response', None), 'status_code', None)
+            reason = 'HTTP %s' % status if status is not None else type(exc).__name__
+            # 不把失败页面当成空列表；也不把含凭据的完整请求 URL 放进日志。
+            raise RuntimeError('Memo 请求失败（%s），请检查网络或源站状态' % reason) from None
 
     # ---------- helpers ----------
     def _norm_path(self, tid: str) -> str:

@@ -54,7 +54,8 @@ class Spider(Spider):
             config = {}
         if not isinstance(config, dict):
             config = {}
-        self.plp = config.get('plp', '')
+        self.network_mode = config.get('network_mode', '')
+        self.plp = '' if self.network_mode == 'system' else config.get('plp', '')
         # 尝试获取最快可用域名
         self.host = self.get_fastest_host()
         self.headers['Referer'] = self.host
@@ -70,12 +71,15 @@ class Spider(Spider):
             return url
 
         # 已经是代理地址：不重复包装
-        if url.startswith(self.plp):
+        if self.plp and url.startswith(self.plp):
             return url
 
         # 相对路径补齐为绝对URL
         if not url.startswith(('http://', 'https://')):
-            url = f"{self.host.rstrip('/')}/{url.lstrip('/')}"
+            url = urllib.parse.urljoin(self.host.rstrip('/') + '/', url)
+
+        if not self.plp:
+            return url
 
         # 注意：保持与原代码一致的 quote 行为，确保代理链路“不可分割”
         return f"{self.plp}{urllib.parse.quote(url)}"

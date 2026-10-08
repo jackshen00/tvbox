@@ -4,7 +4,8 @@ GetAV (getav.net) 采集器。
 
 站点是 Next.js，列表/详情数据都在 self.__next_f.push 的 flight data 里；
 视频源是 m3u8（伪装成 index.txt）。网页/图片/视频都被 Cloudflare 拦截，
-统一走 pg.jar 内置代理 10172（p/0/null = 内置默认代理，浏览器 TLS 指纹过 CF）。
+默认走 pg.jar 内置代理 10172；network_mode=system 时走系统网络。
+系统 VPN 只处理网络路由，源站 Cloudflare 仍可能需要额外验证。
 """
 import json
 import re
@@ -30,7 +31,10 @@ class Spider(BaseSpider):
         self.lang = self.locale_path.strip('/').split('/')[0] or 'zh'
 
         # 内置代理 10172：null = 用 pg.jar 默认代理（浏览器 TLS 指纹，过 Cloudflare）
-        self.proxy = (cfg.get('proxy') or 'http://127.0.0.1:10079/p/0/proxy/').rstrip('/') + '/'
+        self.network_mode = cfg.get('network_mode', '')
+        self.proxy = '' if self.network_mode == 'system' else (
+            cfg.get('proxy') or 'http://127.0.0.1:10079/p/0/proxy/'
+        ).rstrip('/') + '/'
 
         self.headers = {
             'User-Agent': cfg.get('ua')
@@ -39,6 +43,8 @@ class Spider(BaseSpider):
             'Accept-Language': 'zh-CN,zh;q=0.9',
         }
         self.s = requests.Session()
+        if self.network_mode == 'system':
+            self.s.trust_env = False
 
     def getName(self):
         return 'GetAV'
@@ -54,19 +60,19 @@ class Spider(BaseSpider):
     def _wrap(self, u):
         """加内置代理前缀（幂等）"""
         u = (u or '').strip()
-        return u if not u or u.startswith(self.proxy) else self.proxy + u
+        return u if not self.proxy or not u or u.startswith(self.proxy) else self.proxy + u
 
     def _unwrap(self, u):
         """去代理前缀 + 相对地址转绝对"""
         u = (u or '').strip()
-        if u.startswith(self.proxy):
+        if self.proxy and u.startswith(self.proxy):
             u = u[len(self.proxy):]
         return u if u.startswith('http') else urljoin(self.host + '/', u)
 
     def _img(self, u):
         """图片：/xx 是 static.worldstatic.com，再走代理"""
         u = (u or '').strip()
-        if not u or u.startswith(self.proxy):
+        if not u or (self.proxy and u.startswith(self.proxy)):
             return u
         if u.startswith('//'):
             u = 'https:' + u
@@ -296,6 +302,6 @@ class Spider(BaseSpider):
         headers = dict(self.headers)
         headers['Referer'] = f'{self.host}/'
         headers['Origin'] = self.host
-        if real_id.startswith(self.proxy) or self.isVideoFormat(real_id) or '/index.txt' in real_id or '/cdn/assets/deliveries/' in real_id:
+        if (self.proxy and real_id.startswith(self.proxy)) or self.isVideoFormat(real_id) or '/index.txt' in real_id or '/cdn/assets/deliveries/' in real_id:
             return {'parse': 0, 'url': self._wrap(real_id), 'header': headers}
         return {'parse': 1, 'url': real_id, 'header': headers}

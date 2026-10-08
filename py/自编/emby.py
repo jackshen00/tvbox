@@ -22,7 +22,8 @@ class Spider(Spider):
             self.baseUrl = extendDict['server'].strip('/')
             self.username = extendDict['username']
             self.password = extendDict['password']
-            self.proxy = extendDict['proxy']
+            self.network_mode = extendDict.get('network_mode', '')
+            self.proxy = '' if self.network_mode == 'system' else extendDict.get('proxy', '')
             self.thread = extendDict['thread'] if 'thread' in extendDict else 0
             self.device_id = extendDict.get('device_id', str(uuid4()))
             self.client = extendDict.get('client', 'Hills Windows')
@@ -33,6 +34,7 @@ class Spider(Spider):
             self.username = ''
             self.password = ''
             self.proxy = ''
+            self.network_mode = ''
             self.thread = 0
             self.device_id = str(uuid4())
             self.client = 'Hills Windows'
@@ -61,9 +63,16 @@ class Spider(Spider):
         pass
 
     def _get_proxies(self):
+        if self.network_mode == 'system':
+            return None
         if self.proxy and isinstance(self.proxy, str) and self.proxy.strip():
             return {"http": self.proxy, "https": self.proxy}
         return None
+
+    def _image_url(self, url):
+        if not url or self.network_mode == 'system':
+            return url
+        return 'http://127.0.0.1:10079/p/0/127.0.0.1:10172/' + url
 
     def _detect_api_prefix(self):
         if self.api_prefix is not None:
@@ -259,7 +268,7 @@ class Spider(Spider):
             name = self.cleanText(video.get('Name', ''))
             pic = ''
             if 'ImageTags' in video and 'Primary' in video['ImageTags']:
-                pic = f"http://127.0.0.1:10079/p/0/127.0.0.1:10172/{self.baseUrl}{prefix}/Items/{video['Id']}/Images/Primary?maxWidth=400&tag={video['ImageTags']['Primary']}&quality=90"
+                pic = self._image_url(f"{self.baseUrl}{prefix}/Items/{video['Id']}/Images/Primary?maxWidth=400&tag={video['ImageTags']['Primary']}&quality=90")
             videos.append({
                 "vod_id": video.get('Id', ''),
                 "vod_name": name,
@@ -306,7 +315,7 @@ class Spider(Spider):
         vod = {
             "vod_id": item_id,
             "vod_name": videoInfos.get('Name', ''),
-            "vod_pic": f"http://127.0.0.1:10079/p/0/127.0.0.1:10172/{self.baseUrl}{prefix}/Items/{item_id}/Images/Primary?maxWidth=400&tag={videoInfos.get('ImageTags', {}).get('Primary', '')}&quality=90" if 'Primary' in videoInfos.get('ImageTags', {}) else '',
+            "vod_pic": self._image_url(f"{self.baseUrl}{prefix}/Items/{item_id}/Images/Primary?maxWidth=400&tag={videoInfos.get('ImageTags', {}).get('Primary', '')}&quality=90") if 'Primary' in videoInfos.get('ImageTags', {}) else '',
             "type_name": videoInfos.get('Genres', [''])[0] if videoInfos.get('Genres') else '',
             "vod_year": videoInfos.get('ProductionYear', ''),
             "vod_content": videoInfos.get('Overview', '').replace('\xa0', ' ').replace('\n\n', '\n').strip(),
@@ -446,7 +455,7 @@ class Spider(Spider):
             videos.append({
                 "vod_id": sid,
                 "vod_name": name,
-                "vod_pic": f"http://127.0.0.1:10079/p/0/127.0.0.1:10172/{pic}" if pic else '',
+                "vod_pic": self._image_url(pic),
                 "vod_remarks": vod.get('ProductionYear', '')
             })
         return {'list': videos}
@@ -487,7 +496,7 @@ class Spider(Spider):
             except:
                 pass
 
-            if int(self.thread) > 0:
+            if int(self.thread) > 0 and self.network_mode != 'system':
                 try:
                     self.fetch('http://127.0.0.1:10079/p/0/127.0.0.1:10172/', timeout=120)
                 except:
