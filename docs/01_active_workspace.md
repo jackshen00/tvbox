@@ -6,7 +6,7 @@ Android 手机通过 Clash Meta 系统 VPN 使用项目配置，电视通过已�
 
 ## Last position
 
-2026-10-08：`generate_direct_configs.py` 新增统一订阅 `tvbox_all_direct.json`，两份配置按来源 key 去重后保留 81 个来源和 4 个直播入口；同 key 参数冲突会中止生成。43 项检查通过，74 个仓库资源路径均存在。README 已改用统一链接。手机当前仍保存旧 `jsm1_direct.json`，本轮没有在手机导入统一链接。
+2026-10-08：`generate_direct_configs.py` 新增统一订阅 `tvbox_all_direct.json`，两份配置按来源 key 去重后保留 81 个来源和 4 个直播入口；同 key 参数冲突会中止生成。43 项检查通过，74 个仓库资源路径均存在。README 已改用统一链接。代码提交 `88f9960` 已推送，正式 Raw 链接返回 HTTP 200，内容 SHA-256 与本地一致。手机当前仍保存旧 `jsm1_direct.json`，本轮没有在手机导入统一链接。
 
 前一轮代理修复已推送并验证 Raw 内容一致；手机脱离 Mac 本地服务后，Memo 显示 10 条列表，样本播放从 24.076 秒推进到 82.007 秒（state=3）。
 
@@ -35,7 +35,7 @@ Android 手机通过 Clash Meta 系统 VPN 使用项目配置，电视通过已�
 - 169 来源已有 `_jbf_*` 未定义符号，可能影响匹配/解析；不是本次修改引入。
 - 原配置仍继承上游公开凭据；直连输出已清空 Cookie、Token、账号字段，不复制发布。账号来源需用户提供自己的账号。
 - 手机当前使用旧正式仓库链接；统一订阅尚未做手机导入验证。USB localhost 诊断地址只保留为测试历史。
-- 用户报告 PikPak 分享空白。已确认共享配置的 `pikpak_username` / `pikpak_password` 为空，分类文件预置 45 项；缺少账号会影响网盘访问，但尚未确认具体空白发生在分类加载还是内容请求。不得把开启 Clash 等同于账号和分享可用。
+- 用户报告 PikPak 分享连顶部分类也未显示。分类文件预置 45 项；公开配置的 `pikpak_username` / `pikpak_password` 为空。手机近期日志实际包含分类请求：读取 `/storage/emulated/0/TV/.pikpak.pg` / `.pikpak` 时出现 ENOENT，随后空响应触发 `JSONException`。插件的「网盘及彈幕配置 → PikPak網盤設置」提供本机配置/登录入口；尚未验证用户完成本机登录后的结果，不能断言分类缺失只有一个原因。
 - 电视没有接入实测；直播仍有 HTTP 400 / 404 入口，未逐频道播放。
 
 ## 用户已批准行动
