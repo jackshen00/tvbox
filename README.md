@@ -7,10 +7,12 @@
 手机先启动 Clash Meta 的 Android VPN/TUN，并确保播放器在代理范围内；电视使用已经具备外网访问能力的系统网络或透明网关。在播放器「设置 → Vod」添加：
 
 ```text
-https://raw.githubusercontent.com/jackshen00/tvbox/main/jsm1_direct.json
+https://raw.githubusercontent.com/jackshen00/tvbox/main/tvbox_all_direct.json
 ```
 
-另一份配置为 `默影视18_direct.json`。两个配置分别保留原来的 66 / 77 个来源，资源引用自己的 fork。**上述链接只有在本地改动提交并推送后才生效。** Mac 的 `.venv` 不会替代播放器内置的 Android Python 运行环境。
+统一配置 `tvbox_all_direct.json` 合并两份直连配置，按来源 key 去重后包含 81 个来源（含 7 个漫画、3 个小说来源）和 4 个直播入口，资源引用自己的 fork。重复来源保留 `jsm1_direct.json` 的顺序和显示名称；接口或参数冲突会中止生成，避免静默覆盖。原来的 `jsm1_direct.json` / `默影视18_direct.json` 仍保留，兼容已保存的旧链接。洛雪音乐 JS 音源需在音乐客户端单独导入。
+
+Mac 的 `.venv` 不会替代播放器内置的 Android Python 运行环境。
 
 直连版使用系统路由，不依赖 sing-box 的 10172 端口。图片解密、媒体处理和直播服务需要的本地接口仍然保留；网络通畅不能修复失效站点、Cloudflare 验证、账号限制或缺失的本地直播服务。
 

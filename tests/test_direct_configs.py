@@ -143,6 +143,47 @@ class DirectConfigTests(unittest.TestCase):
         self.assertIs(result['hasToken'], False)
         self.assertIsNone(result['session'])
 
+    def test_merge_retains_source_order_deduplicates_lives_and_keeps_first_name(self):
+        primary = {'spider': 'direct.jar', 'sites': [
+            {'key': 'video', 'name': '视频', 'api': 'video.py', 'ext': {'network_mode': 'system'}}],
+            'lives': [{'name': '直播', 'url': 'https://example.test/live.m3u'}]}
+        secondary = {'spider': 'direct.jar', 'sites': [
+            {'key': 'video', 'name': '视频别名', 'api': 'video.py', 'ext': {'network_mode': 'system'}},
+            {'key': 'comic', 'name': '漫画', 'api': 'comic.py'}],
+            'lives': primary['lives'] + [{'name': '另一直播', 'url': 'https://example.test/other.m3u'}]}
+        result = generator.merge_direct_configs([primary, secondary])
+        self.assertEqual([s['key'] for s in result['sites']], ['video', 'comic'])
+        self.assertEqual(result['sites'][0]['name'], '视频')
+        self.assertEqual(len(result['lives']), 2)
+        result['sites'][0]['ext']['network_mode'] = 'changed'
+        self.assertEqual(primary['sites'][0]['ext']['network_mode'], 'system')
+        self.assertEqual(len(primary['sites']), 1)
+
+    def test_merge_rejects_same_key_with_different_parameters(self):
+        with self.assertRaisesRegex(ValueError, '重复来源参数冲突'):
+            generator.merge_direct_configs([
+                {'sites': [{'key': 'same', 'api': 'first.py'}]},
+                {'sites': [{'key': 'same', 'api': 'second.py'}]}])
+
+    def test_merge_rejects_no_configs(self):
+        with self.assertRaises(ValueError):
+            generator.merge_direct_configs([])
+
+    def test_merged_output_contains_all_distinct_sources_and_public_resources(self):
+        configs = [generator.direct_config(json.loads((ROOT / name).read_text(encoding='utf-8')))
+                   for name in generator.CONFIGS]
+        result = generator.merge_direct_configs(configs)
+        keys = [s['key'] for s in result['sites']]
+        self.assertEqual(len(keys), 81)
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertEqual(set(keys), {s['key'] for c in configs for s in c['sites']})
+        self.assertEqual(keys[:66], [s['key'] for s in configs[0]['sites']])
+        self.assertEqual(len(result['lives']), 4)
+        self.assertEqual(result['spider'], generator.DEFAULT_BASE_URL + '/jar/pg_direct.jar')
+        self.assertEqual(generator.public_config(result), result)
+        self.assertNotIn('raw.githubusercontent.com/zw110708/tvbox/main/', json.dumps(result))
+        self.assertEqual(json.loads((ROOT / generator.MERGED_CONFIG).read_text(encoding='utf-8')), result)
+
     def test_generated_outputs_match_sources(self):
         for name in generator.CONFIGS:
             source = json.loads((ROOT / name).read_text(encoding='utf-8'))

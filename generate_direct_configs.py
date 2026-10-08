@@ -17,6 +17,7 @@ PROXY_ALIAS = re.compile(r'^proxy\d*$')
 # 仅取消经 sing-box 的网络转发，不取消解密、直播等本地服务。
 NETWORK_PREFIX = re.compile(r'^http://127\.0\.0\.1:10079/p/0/(?:127\.0\.0\.1:1017[2-7]|proxy\d*)/')
 CONFIGS = ('jsm1.json', '默影视18.json')
+MERGED_CONFIG = 'tvbox_all_direct.json'
 HELPER = 'lib/zhengjinsong.json'
 DIRECT_HELPER = 'lib/zhengjinsong_direct.json'
 
@@ -114,6 +115,30 @@ def direct_helper(data, base_url=DEFAULT_BASE_URL):
     return public_config(rewrite_urls(result, base_url))
 
 
+def merge_direct_configs(configs):
+    """按来源 key 去重，名称差异保留首份；不同接口不能静默覆盖。"""
+    if not configs:
+        raise ValueError('至少需要一份配置')
+    result = copy.deepcopy(configs[0])
+    result['sites'], result['lives'] = [], []
+    sites = {}
+    for config in configs:
+        for site in config.get('sites', []):
+            key = site['key']
+            if key in sites:
+                existing = {k: v for k, v in sites[key].items() if k != 'name'}
+                candidate = {k: v for k, v in site.items() if k != 'name'}
+                if existing != candidate:
+                    raise ValueError(f'重复来源参数冲突: {key}')
+                continue
+            sites[key] = copy.deepcopy(site)
+            result['sites'].append(sites[key])
+        for live in config.get('lives', []):
+            if live not in result['lives']:
+                result['lives'].append(copy.deepcopy(live))
+    return result
+
+
 def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -122,8 +147,10 @@ def write_json(path, data):
 def make_direct_config(source_path, target_path, base_url=DEFAULT_BASE_URL):
     source_path, target_path = Path(source_path), Path(target_path)
     data = json.loads(source_path.read_text(encoding='utf-8'))
-    write_json(target_path, direct_config(data, base_url))
+    result = direct_config(data, base_url)
+    write_json(target_path, result)
     print(f'生成 {target_path.name}: 保留 {len(data.get("sites", []))} 个来源')
+    return result
 
 
 def main():
@@ -133,8 +160,11 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     output = args.output_dir or root
-    for name in CONFIGS:
-        make_direct_config(root / name, output / f'{Path(name).stem}_direct.json', args.base_url)
+    configs = [make_direct_config(root / name, output / f'{Path(name).stem}_direct.json', args.base_url)
+               for name in CONFIGS]
+    merged = merge_direct_configs(configs)
+    write_json(output / MERGED_CONFIG, merged)
+    print(f'生成 {MERGED_CONFIG}: {len(merged["sites"])} 个不同来源，{len(merged["lives"])} 个直播入口')
     write_json(output / DIRECT_HELPER, direct_helper(json.loads((root / HELPER).read_text(encoding='utf-8')), args.base_url))
     print(f'生成 {DIRECT_HELPER}: 已清空内置代理订阅与显式代理设置')
 
